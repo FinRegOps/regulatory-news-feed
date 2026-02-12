@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Regulatory News Feed</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:wght@400;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body, #root { height: 100%; width: 100%; overflow: hidden; }
+    body { font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif; background: #fff; color: #111827; }
+
+    /* Animations */
+    @keyframes fadeSlideIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes shimmer {
+      0%   { background-position: -400px 0; }
+      100% { background-position: 400px 0; }
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .skeleton-line {
+      height: 14px; border-radius: 4px;
+      background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 37%, #f0f0f0 63%);
+      background-size: 800px 100%;
+      animation: shimmer 1.6s ease-in-out infinite;
+    }
+
+    /* Sidebar */
+    .sidebar {
+      width: 248px; background: #FAFBFC; border-right: 1px solid #EAECEF;
+      display: flex; flex-direction: column; padding: 20px 12px; flex-shrink: 0;
+    }
+    .sidebar-logo { display: flex; align-items: center; gap: 9px; padding: 0 14px; margin-bottom: 6px; }
+    .sidebar-logo-icon {
+      width: 28px; height: 28px; border-radius: 6px;
+      background: linear-gradient(135deg, #003082, #00857C);
+      display: flex; align-items: center; justify-content: center;
+      color: #fff; font-size: 14px; font-weight: 700; font-family: 'DM Sans', sans-serif;
+    }
+    .sidebar-logo-text { font-size: 15px; font-weight: 700; color: #111827; font-family: 'Source Serif 4', Georgia, serif; }
+    .sidebar-subtitle { font-size: 11.5px; color: #9CA3AF; padding: 0 14px; margin-bottom: 24px; line-height: 1.45; }
+    .sidebar-item {
+      display: flex; align-items: center; gap: 10px; padding: 9px 14px; border-radius: 6px;
+      cursor: pointer; font-size: 14px; font-weight: 500; color: #6B7280;
+      transition: all 0.15s ease; border: none; background: none; width: 100%;
+      text-align: left; font-family: 'DM Sans', sans-serif; margin-bottom: 2px;
+    }
+    .sidebar-item:hover { background: #F3F4F6; color: #374151; }
+    .sidebar-item.active { background: #EFF6FF; color: #1D4ED8; }
+    .sidebar-item-icon { font-size: 16px; width: 22px; text-align: center; }
+    .sidebar-footer { margin-top: auto; padding: 16px 14px; border-top: 1px solid #EAECEF; font-size: 11px; color: #9CA3AF; line-height: 1.6; }
+
+    /* Main area */
+    .main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+    .header { padding: 16px 24px; border-bottom: 1px solid #EAECEF; background: #fff; position: sticky; top: 0; z-index: 10; }
+    .header-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+    .header-title {
+      font-size: 20px; font-weight: 700; color: #111827;
+      font-family: 'Source Serif 4', Georgia, serif; display: flex; align-items: center; gap: 8px;
+    }
+    .header-right { display: flex; align-items: center; gap: 10px; }
+    .header-updated { font-size: 11px; color: #9CA3AF; }
+
+    /* Refresh button */
+    .refresh-btn {
+      border: 1px solid #E5E7EB; background: #fff; border-radius: 6px;
+      padding: 6px 14px; font-size: 12px; font-weight: 600; color: #374151;
+      cursor: pointer; transition: all 0.15s ease; font-family: 'DM Sans', sans-serif;
+      display: inline-flex; align-items: center; gap: 5px;
+    }
+    .refresh-btn:hover { background: #F9FAFB; border-color: #D1D5DB; }
+    .refresh-btn:disabled { opacity: .5; cursor: default; }
+    .refresh-btn .icon { display: inline-block; }
+    .refresh-btn .icon.spinning { animation: spin .8s linear infinite; }
+
+    /* Source tabs */
+    .source-tabs { display: flex; gap: 4px; overflow-x: auto; padding-bottom: 2px; }
+    .source-tab {
+      border: none; background: none; cursor: pointer; padding: 8px 14px;
+      font-size: 13px; font-weight: 500; color: #6B7280; border-radius: 6px;
+      transition: all 0.15s ease; font-family: 'DM Sans', sans-serif; white-space: nowrap;
+      display: inline-flex; align-items: center; gap: 6px;
+    }
+    .source-tab:hover { background: #F3F4F6; color: #374151; }
+    .source-tab.active { background: #111827; color: #fff; }
+    .source-dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
+
+    /* Feed list */
+    .feed { flex: 1; overflow-y: auto; }
+    .feed-item {
+      padding: 18px 22px; border-bottom: 1px solid #F3F4F6;
+      cursor: pointer; transition: background 0.15s ease;
+    }
+    .feed-item:hover { background: #FAFBFC; }
+    .feed-item-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px; flex-wrap: wrap; }
+    .feed-item-badges { display: flex; align-items: center; gap: 8px; }
+    .badge-source {
+      display: inline-flex; align-items: center; gap: 4px;
+      font-size: 11px; font-weight: 600; letter-spacing: 0.04em;
+      text-transform: uppercase; padding: 3px 8px; border-radius: 4px;
+    }
+    .badge-source .dot { width: 6px; height: 6px; border-radius: 50%; }
+    .badge-type {
+      font-size: 11px; color: #6B7280; background: #F3F4F6;
+      padding: 2px 7px; border-radius: 3px; font-weight: 500;
+    }
+    .feed-item-time { color: #9CA3AF; font-size: 12px; font-weight: 500; white-space: nowrap; }
+    .feed-item-title {
+      margin: 0; font-size: 15px; font-weight: 600; line-height: 1.45; color: #111827;
+      font-family: 'Source Serif 4', Georgia, serif;
+    }
+    .feed-item-summary { margin: 6px 0 0; font-size: 13.5px; line-height: 1.55; color: #6B7280; }
+
+    .empty-state { padding: 60px 20px; text-align: center; color: #9CA3AF; font-size: 14px; }
+    .empty-state .emoji { font-size: 32px; margin-bottom: 8px; }
+
+    .alert-bar {
+      margin: 12px 20px; padding: 10px 14px;
+      background: #FEF3C7; border: 1px solid #FDE68A; border-radius: 6px;
+      font-size: 13px; color: #92400E;
+    }
+
+    /* Skeleton card */
+    .skeleton-card { padding: 18px 22px; border-bottom: 1px solid #F3F4F6; }
+    .skeleton-row { display: flex; gap: 8px; margin-bottom: 10px; }
+
+    /* Hamburger for mobile */
+    .hamburger {
+      display: none; border: none; background: none; cursor: pointer;
+      font-size: 20px; color: #374151; padding: 4px;
+    }
+    /* Mobile overlay */
+    .mobile-overlay {
+      display: none; position: fixed; inset: 0; background: rgba(0,0,0,.3);
+      z-index: 99; opacity: 0; pointer-events: none; transition: opacity .2s;
+    }
+    .mobile-sidebar {
+      display: none; position: fixed; left: 0; top: 0; bottom: 0; width: 248px;
+      background: #FAFBFC; z-index: 100; border-right: 1px solid #EAECEF;
+      padding: 20px 12px; transform: translateX(-100%); transition: transform .2s ease;
+    }
+
+    @media (max-width: 768px) {
+      .sidebar { display: none !important; }
+      .hamburger { display: block; }
+      .mobile-overlay { display: block; }
+      .mobile-sidebar { display: flex; flex-direction: column; }
+      .mobile-sidebar.open { transform: translateX(0); }
+      .mobile-overlay.open { opacity: 1; pointer-events: auto; }
+      .header { padding: 14px 16px; }
+      .feed-item { padding: 14px 16px; }
+      .header-title { font-size: 17px; }
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.26.5/babel.min.js"></script>
+
+  <script type="text/babel">
+    const { useState, useEffect, useCallback, useRef } = React;
+
+    /* ── Config ─────────────────────────────────── */
+    const SOURCES = [
+      { id: "all",  label: "All Sources", color: "#374151" },
+      { id: "dnb",  label: "DNB",  color: "#003082" },
+      { id: "afm",  label: "AFM",  color: "#00857C" },
+      { id: "eba",  label: "EBA",  color: "#8B5E3C" },
+      { id: "esma", label: "ESMA", color: "#6B21A8" },
+    ];
+
+    const PAGES = [
+      { icon: "📰", label: "News Feed",     id: "feed" },
+      { icon: "🔔", label: "Alerts",        id: "alerts" },
+      { icon: "📋", label: "Consultations", id: "consultations" },
+      { icon: "📊", label: "Publications",  id: "publications" },
+    ];
+
+    /* ── Helpers ─────────────────────────────────── */
+    function timeAgo(dateStr) {
+      const diff = Math.floor((Date.now() - new Date(dateStr)) / 1000);
+      if (diff < 60)    return "just now";
+      if (diff < 3600)  return Math.floor(diff / 60) + "m ago";
+      if (diff < 86400) return Math.floor(diff / 3600) + "h ago";
+      if (diff < 604800) return Math.floor(diff / 86400) + "d ago";
+      return new Date(dateStr).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+    }
+
+    function sourceStyle(id) {
+      const s = SOURCES.find(x => x.id === id) || SOURCES[0];
+      return { bg: s.color + "14", color: s.color, border: s.color + "28" };
+    }
+
+    /* ── Demo data (fallback) ───────────────────── */
+    function getDemoData(source, page) {
+      const now = Date.now();
+      const h = n => new Date(now - n * 3600000).toISOString();
+
+      const all = [
+        { title: "DNB publishes updated guidance on AI risk management for financial institutions", summary: "De Nederlandsche Bank has released comprehensive guidance for supervised entities on managing risks associated with artificial intelligence deployment.", source: "dnb", date: h(2), type: "Guidance", url: "https://www.dnb.nl" },
+        { title: "AFM warns consumers about unauthorized crypto asset service providers", summary: "The Authority for Financial Markets has added several entities to its warning list operating without required authorization.", source: "afm", date: h(5), type: "Warning", url: "https://www.afm.nl" },
+        { title: "EBA launches consultation on revised guidelines for ICT risk management", summary: "The European Banking Authority seeks feedback on updated guidelines under the Digital Operational Resilience Act (DORA).", source: "eba", date: h(8), type: "Consultation", url: "https://www.eba.europa.eu" },
+        { title: "DNB reports on systemic risks in Dutch commercial real estate market", summary: "Latest Financial Stability Report highlights vulnerabilities in the commercial real estate sector and potential spillover effects.", source: "dnb", date: h(24), type: "Publication", url: "https://www.dnb.nl" },
+        { title: "ESMA updates Q&A on MiFID II/MiFIR investor protection topics", summary: "New Q&A entries address product governance, costs and charges transparency, and best execution requirements.", source: "esma", date: h(26), type: "Publication", url: "https://www.esma.europa.eu" },
+        { title: "AFM fines investment firm for inadequate suitability assessments", summary: "A €750,000 fine was imposed for systematic failures in assessing whether investment products were suitable for retail clients.", source: "afm", date: h(48), type: "Enforcement", url: "https://www.afm.nl" },
+        { title: "DNB publishes Good Practices for managing climate-related financial risks", summary: "Updated supervisory expectations for banks and insurers on integrating climate risk into governance, strategy, and risk management frameworks.", source: "dnb", date: h(72), type: "Guidance", url: "https://www.dnb.nl" },
+        { title: "EBA publishes final report on ESG risks management and supervision", summary: "Report outlines how ESG factors should be integrated into institutions' risk management and supervisory review processes.", source: "eba", date: h(96), type: "Publication", url: "https://www.eba.europa.eu" },
+        { title: "AFM launches market study into payment for order flow practices", summary: "Research into how PFOF arrangements affect execution quality for Dutch retail investors in equity markets.", source: "afm", date: h(120), type: "Press Release", url: "https://www.afm.nl" },
+        { title: "ESMA issues guidance on crypto-asset classification under MiCA", summary: "New supervisory briefing clarifies the classification of different types of crypto-assets under the Markets in Crypto-Assets Regulation.", source: "esma", date: h(144), type: "Guidance", url: "https://www.esma.europa.eu" },
+      ];
+
+      let items = source === "all" ? all : all.filter(i => i.source === source);
+
+      if (page === "alerts")        items = items.filter(i => ["Warning","Enforcement"].includes(i.type));
+      if (page === "consultations") items = items.filter(i => i.type === "Consultation");
+      if (page === "publications")  items = items.filter(i => ["Publication","Guidance"].includes(i.type));
+
+      return items;
+    }
+
+    /* ── Sidebar component ──────────────────────── */
+    function Sidebar({ activePage, setActivePage, onClose }) {
+      return (
+        <>
+          <div className="sidebar-logo">
+            <div className="sidebar-logo-icon">R</div>
+            <span className="sidebar-logo-text">Regulatory Hub</span>
+          </div>
+          <p className="sidebar-subtitle">Financial regulatory news &amp; updates</p>
+          <div>
+            {PAGES.map(p => (
+              <button
+                key={p.id}
+                className={`sidebar-item ${activePage === p.id ? "active" : ""}`}
+                onClick={() => { setActivePage(p.id); onClose && onClose(); }}
+              >
+                <span className="sidebar-item-icon">{p.icon}</span>
+                {p.label}
+              </button>
+            ))}
+          </div>
+          <div className="sidebar-footer">
+            Sources: DNB · AFM · EBA · ESMA<br />
+            Powered by AI web search
+          </div>
+        </>
+      );
+    }
+
+    /* ── Main App ───────────────────────────────── */
+    function App() {
+      const [activeSource, setActiveSource] = useState("all");
+      const [activePage, setActivePage]     = useState("feed");
+      const [newsItems, setNewsItems]       = useState([]);
+      const [loading, setLoading]           = useState(true);
+      const [error, setError]               = useState(null);
+      const [lastUpdated, setLastUpdated]   = useState(null);
+      const [mobileOpen, setMobileOpen]     = useState(false);
+      const abortRef = useRef(null);
+
+      const fetchNews = useCallback(async (source) => {
+        if (abortRef.current) abortRef.current.abort();
+        const controller = new AbortController();
+        abortRef.current = controller;
+
+        setLoading(true);
+        setError(null);
+
+        const sourceQuery =
+          source === "all"  ? "DNB OR AFM OR EBA OR ESMA" :
+          source === "dnb"  ? "De Nederlandsche Bank DNB" :
+          source === "afm"  ? "Autoriteit Financiële Markten AFM" :
+          source === "eba"  ? "European Banking Authority EBA" :
+                              "European Securities Markets Authority ESMA";
+
+        const pageLabel =
+          activePage === "feed"          ? "news updates" :
+          activePage === "alerts"        ? "warnings alerts enforcement" :
+          activePage === "consultations" ? "consultations proposals" :
+                                           "publications reports";
+
+        const prompt = `Search for the most recent regulatory ${pageLabel} from ${sourceQuery} (financial regulators). Return ONLY a JSON array of 8-12 news items. Each item must have: "title" (string), "summary" (1-2 sentence summary), "source" (one of: "dnb", "afm", "eba", "esma"), "date" (ISO date string, best estimate), "type" (e.g. "Press Release", "Consultation", "Publication", "Warning", "Guidance", "Enforcement"), "url" (source URL if available, or null). Return ONLY the raw JSON array, no markdown, no backticks, no explanation.`;
+
+        try {
+          const response = await fetch("https://api.anthropic.com/v1/messages", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              model: "claude-sonnet-4-20250514",
+              max_tokens: 1000,
+              messages: [{ role: "user", content: prompt }],
+              tools: [{ type: "web_search_20250305", name: "web_search" }],
+            }),
+            signal: controller.signal,
+          });
+
+          const data = await response.json();
+          const text = data.content
+            ?.map(b => b.type === "text" ? b.text : "")
+            .filter(Boolean)
+            .join("\n");
+
+          if (text) {
+            const clean = text.replace(/```json|```/g, "").trim();
+            const parsed = JSON.parse(clean);
+            if (Array.isArray(parsed)) {
+              setNewsItems(parsed);
+              setLastUpdated(new Date());
+              setLoading(false);
+              return;
+            }
+          }
+          throw new Error("No valid response");
+        } catch (err) {
+          if (err.name === "AbortError") return;
+          setError("Live feed unavailable — showing demo data. To enable live news, deploy with an API proxy.");
+          setNewsItems(getDemoData(source, activePage));
+          setLastUpdated(new Date());
+        } finally {
+          setLoading(false);
+        }
+      }, [activePage]);
+
+      useEffect(() => {
+        fetchNews(activeSource);
+        return () => abortRef.current?.abort();
+      }, [activeSource, fetchNews]);
+
+      const currentPage = PAGES.find(p => p.id === activePage);
+
+      return (
+        <div style={{ display: "flex", height: "100vh" }}>
+
+          {/* Desktop sidebar */}
+          <div className="sidebar">
+            <Sidebar activePage={activePage} setActivePage={setActivePage} />
+          </div>
+
+          {/* Mobile sidebar */}
+          <div className={`mobile-overlay ${mobileOpen ? "open" : ""}`} onClick={() => setMobileOpen(false)} />
+          <div className={`mobile-sidebar ${mobileOpen ? "open" : ""}`}>
+            <Sidebar activePage={activePage} setActivePage={setActivePage} onClose={() => setMobileOpen(false)} />
+          </div>
+
+          {/* Main */}
+          <div className="main">
+            {/* Header */}
+            <div className="header">
+              <div className="header-top">
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <button className="hamburger" onClick={() => setMobileOpen(true)}>☰</button>
+                  <h1 className="header-title">
+                    <span>{currentPage?.icon}</span> {currentPage?.label}
+                  </h1>
+                </div>
+                <div className="header-right">
+                  {lastUpdated && (
+                    <span className="header-updated">
+                      Updated {lastUpdated.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}
+                    </span>
+                  )}
+                  <button className="refresh-btn" onClick={() => fetchNews(activeSource)} disabled={loading}>
+                    <span className={`icon ${loading ? "spinning" : ""}`}>↻</span> Refresh
+                  </button>
+                </div>
+              </div>
+
+              <div className="source-tabs">
+                {SOURCES.map(s => (
+                  <button
+                    key={s.id}
+                    className={`source-tab ${activeSource === s.id ? "active" : ""}`}
+                    onClick={() => setActiveSource(s.id)}
+                  >
+                    <span className="source-dot" style={{ background: activeSource === s.id ? "#fff" : s.color }} />
+                    {s.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Feed */}
+            <div className="feed">
+              {error && <div className="alert-bar">⚠️ {error}</div>}
+
+              {loading ? (
+                Array.from({ length: 5 }).map((_, i) => (
+                  <div className="skeleton-card" key={i}>
+                    <div className="skeleton-row">
+                      <div className="skeleton-line" style={{ width: 64, height: 20 }} />
+                      <div className="skeleton-line" style={{ width: 80, height: 20 }} />
+                    </div>
+                    <div className="skeleton-line" style={{ width: "85%", marginBottom: 8 }} />
+                    <div className="skeleton-line" style={{ width: "60%" }} />
+                  </div>
+                ))
+              ) : newsItems.length > 0 ? (
+                newsItems.map((item, i) => {
+                  const st = sourceStyle(item.source);
+                  return (
+                    <div
+                      className="feed-item"
+                      key={i}
+                      style={{ animationDelay: `${i * 0.05}s`, animation: `fadeSlideIn 0.35s ease ${i * 0.05}s both` }}
+                      onClick={() => item.url && window.open(item.url, "_blank")}
+                    >
+                      <div className="feed-item-top">
+                        <div className="feed-item-badges">
+                          <span className="badge-source" style={{ background: st.bg, color: st.color, border: `1px solid ${st.border}` }}>
+                            <span className="dot" style={{ background: st.color }} />
+                            {(SOURCES.find(x => x.id === item.source) || {}).label || item.source}
+                          </span>
+                          {item.type && <span className="badge-type">{item.type}</span>}
+                        </div>
+                        <span className="feed-item-time">{timeAgo(item.date)}</span>
+                      </div>
+                      <h3 className="feed-item-title">{item.title}</h3>
+                      {item.summary && <p className="feed-item-summary">{item.summary}</p>}
+                    </div>
+                  );
+                })
+              ) : (
+                <div className="empty-state">
+                  <div className="emoji">📭</div>
+                  <p>No items found for this source and category.</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+  </script>
+</body>
+</html>
